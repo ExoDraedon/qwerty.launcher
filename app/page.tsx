@@ -10,7 +10,7 @@ import StartScreen from "@/components/start-screen"
 // ==========================================
 // CONFIGURA TU IMAGEN DE FONDO AQUI
 // ==========================================
-const BACKGROUND_IMAGE = "/dark-cyberpunk-city-neon-lights.jpg"
+const BACKGROUND_IMAGE = "/back.png"
 
 // ==========================================
 // CONFIGURA EL SERVIDOR AQUI
