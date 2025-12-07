@@ -15,35 +15,127 @@ class CRTSoundEngine {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
     this.masterGain = this.audioContext.createGain()
     this.masterGain.connect(this.audioContext.destination)
-    this.masterGain.gain.value = 0.6
+    this.masterGain.gain.value = 0.5
   }
 
   setMuted(muted: boolean) {
     this.isMuted = muted
     if (this.masterGain) {
-      this.masterGain.gain.value = muted ? 0 : 0.6
+      this.masterGain.gain.value = muted ? 0 : 0.5
     }
   }
 
-  // Sonido de degauss/encendido inicial del CRT
+  playPowerClick() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    // Click mecanico inicial
+    const clickOsc = this.audioContext.createOscillator()
+    const clickGain = this.audioContext.createGain()
+    const clickFilter = this.audioContext.createBiquadFilter()
+
+    clickFilter.type = "bandpass"
+    clickFilter.frequency.value = 2000
+    clickFilter.Q.value = 1
+
+    clickOsc.type = "square"
+    clickOsc.frequency.setValueAtTime(180, this.audioContext.currentTime)
+    clickOsc.frequency.exponentialRampToValueAtTime(60, this.audioContext.currentTime + 0.03)
+
+    clickGain.gain.setValueAtTime(0.4, this.audioContext.currentTime)
+    clickGain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05)
+
+    clickOsc.connect(clickFilter)
+    clickFilter.connect(clickGain)
+    clickGain.connect(this.masterGain)
+
+    clickOsc.start()
+    clickOsc.stop(this.audioContext.currentTime + 0.05)
+
+    // Ruido de relay/rele
+    const noiseBuffer = this.audioContext.createBuffer(
+      1,
+      this.audioContext.sampleRate * 0.03,
+      this.audioContext.sampleRate,
+    )
+    const noiseData = noiseBuffer.getChannelData(0)
+    for (let i = 0; i < noiseData.length; i++) {
+      noiseData[i] = (Math.random() * 2 - 1) * 0.5
+    }
+
+    const noiseSource = this.audioContext.createBufferSource()
+    const noiseGain = this.audioContext.createGain()
+    const noiseFilter = this.audioContext.createBiquadFilter()
+
+    noiseFilter.type = "highpass"
+    noiseFilter.frequency.value = 1000
+
+    noiseSource.buffer = noiseBuffer
+    noiseGain.gain.setValueAtTime(0.2, this.audioContext.currentTime)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.03)
+
+    noiseSource.connect(noiseFilter)
+    noiseFilter.connect(noiseGain)
+    noiseGain.connect(this.masterGain)
+
+    noiseSource.start(this.audioContext.currentTime + 0.01)
+  }
+
   playDegauss() {
     if (!this.audioContext || !this.masterGain || this.isMuted) return
 
-    const duration = 0.8
+    const duration = 1.2
+
+    // Oscilador principal de degauss
     const osc = this.audioContext.createOscillator()
+    const osc2 = this.audioContext.createOscillator()
     const gain = this.audioContext.createGain()
     const filter = this.audioContext.createBiquadFilter()
 
     filter.type = "lowpass"
-    filter.frequency.setValueAtTime(800, this.audioContext.currentTime)
-    filter.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + duration)
+    filter.frequency.setValueAtTime(400, this.audioContext.currentTime)
+    filter.frequency.exponentialRampToValueAtTime(80, this.audioContext.currentTime + duration)
 
     osc.type = "sawtooth"
     osc.frequency.setValueAtTime(120, this.audioContext.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + duration)
+    osc.frequency.exponentialRampToValueAtTime(40, this.audioContext.currentTime + duration)
 
-    gain.gain.setValueAtTime(0.25, this.audioContext.currentTime)
+    osc2.type = "sine"
+    osc2.frequency.setValueAtTime(60, this.audioContext.currentTime) // 60Hz hum
+
+    gain.gain.setValueAtTime(0.2, this.audioContext.currentTime)
+    gain.gain.linearRampToValueAtTime(0.25, this.audioContext.currentTime + 0.2)
     gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
+
+    osc.connect(filter)
+    osc2.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc2.start()
+    osc.stop(this.audioContext.currentTime + duration)
+    osc2.stop(this.audioContext.currentTime + duration)
+  }
+
+  playHighVoltageCharge() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const duration = 0.8
+
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+
+    filter.type = "highpass"
+    filter.frequency.value = 8000
+
+    osc.type = "sawtooth"
+    osc.frequency.setValueAtTime(100, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(15734, this.audioContext.currentTime + duration) // Frecuencia flyback
+
+    gain.gain.setValueAtTime(0.02, this.audioContext.currentTime)
+    gain.gain.linearRampToValueAtTime(0.05, this.audioContext.currentTime + duration * 0.8)
+    gain.gain.exponentialRampToValueAtTime(0.02, this.audioContext.currentTime + duration)
 
     osc.connect(filter)
     filter.connect(gain)
@@ -51,34 +143,6 @@ class CRTSoundEngine {
 
     osc.start()
     osc.stop(this.audioContext.currentTime + duration)
-  }
-
-  // Sonido de alta tension del flyback transformer
-  playFlybackWhine() {
-    if (!this.audioContext || !this.masterGain || this.isMuted) return
-
-    const osc = this.audioContext.createOscillator()
-    const gain = this.audioContext.createGain()
-
-    osc.type = "sine"
-    osc.frequency.setValueAtTime(15734, this.audioContext.currentTime) // Frecuencia real del flyback NTSC
-
-    gain.gain.setValueAtTime(0, this.audioContext.currentTime)
-    gain.gain.linearRampToValueAtTime(0.015, this.audioContext.currentTime + 0.3)
-    gain.gain.setValueAtTime(0.015, this.audioContext.currentTime + 2)
-    gain.gain.linearRampToValueAtTime(0.008, this.audioContext.currentTime + 4)
-
-    osc.connect(gain)
-    gain.connect(this.masterGain)
-
-    osc.start()
-
-    return {
-      stop: () => {
-        gain.gain.linearRampToValueAtTime(0, this.audioContext!.currentTime + 0.5)
-        setTimeout(() => osc.stop(), 500)
-      },
-    }
   }
 
   // Estatica de TV
@@ -98,11 +162,11 @@ class CRTSoundEngine {
     const filter = this.audioContext.createBiquadFilter()
 
     filter.type = "bandpass"
-    filter.frequency.value = 3000
-    filter.Q.value = 0.5
+    filter.frequency.value = 2500
+    filter.Q.value = 0.7
 
     source.buffer = buffer
-    gain.gain.setValueAtTime(0.15, this.audioContext.currentTime)
+    gain.gain.setValueAtTime(0.12, this.audioContext.currentTime)
     gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
 
     source.connect(filter)
@@ -114,28 +178,66 @@ class CRTSoundEngine {
     return { stop: () => source.stop() }
   }
 
-  // Click de encendido de switch
-  playPowerClick() {
+  playBeamExpand() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const duration = 1.5
+
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+
+    filter.type = "lowpass"
+    filter.frequency.setValueAtTime(150, this.audioContext.currentTime)
+    filter.frequency.linearRampToValueAtTime(600, this.audioContext.currentTime + duration * 0.5)
+    filter.frequency.linearRampToValueAtTime(300, this.audioContext.currentTime + duration)
+
+    osc.type = "sine"
+    osc.frequency.setValueAtTime(50, this.audioContext.currentTime)
+    osc.frequency.linearRampToValueAtTime(120, this.audioContext.currentTime + duration * 0.3)
+    osc.frequency.linearRampToValueAtTime(80, this.audioContext.currentTime + duration)
+
+    gain.gain.setValueAtTime(0.15, this.audioContext.currentTime)
+    gain.gain.linearRampToValueAtTime(0.2, this.audioContext.currentTime + duration * 0.4)
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
+
+    osc.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + duration)
+  }
+
+  // Flyback whine continuo
+  playFlybackWhine() {
     if (!this.audioContext || !this.masterGain || this.isMuted) return
 
     const osc = this.audioContext.createOscillator()
     const gain = this.audioContext.createGain()
 
-    osc.type = "square"
-    osc.frequency.setValueAtTime(150, this.audioContext.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + 0.05)
+    osc.type = "sine"
+    osc.frequency.setValueAtTime(15734, this.audioContext.currentTime)
 
-    gain.gain.setValueAtTime(0.3, this.audioContext.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.08)
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime)
+    gain.gain.linearRampToValueAtTime(0.012, this.audioContext.currentTime + 0.3)
+    gain.gain.setValueAtTime(0.012, this.audioContext.currentTime + 2)
+    gain.gain.linearRampToValueAtTime(0.006, this.audioContext.currentTime + 4)
 
     osc.connect(gain)
     gain.connect(this.masterGain)
 
     osc.start()
-    osc.stop(this.audioContext.currentTime + 0.08)
+
+    return {
+      stop: () => {
+        gain.gain.linearRampToValueAtTime(0, this.audioContext!.currentTime + 0.5)
+        setTimeout(() => osc.stop(), 500)
+      },
+    }
   }
 
-  // Zumbido electrico de CRT (60Hz hum)
+  // Hum electrico
   playHum() {
     if (!this.audioContext || !this.masterGain || this.isMuted) return
 
@@ -144,11 +246,11 @@ class CRTSoundEngine {
     const gain = this.audioContext.createGain()
 
     osc.type = "sine"
-    osc.frequency.value = 60 // 60Hz hum
+    osc.frequency.value = 60
     osc2.type = "sine"
-    osc2.frequency.value = 120 // Armonico
+    osc2.frequency.value = 120
 
-    gain.gain.value = 0.02
+    gain.gain.value = 0.015
 
     osc.connect(gain)
     osc2.connect(gain)
@@ -168,59 +270,33 @@ class CRTSoundEngine {
     }
   }
 
-  // Sonido de expansion vertical (woosh magnetico)
-  playVerticalExpand() {
-    if (!this.audioContext || !this.masterGain || this.isMuted) return
-
-    const duration = 1.2
-    const osc = this.audioContext.createOscillator()
-    const gain = this.audioContext.createGain()
-    const filter = this.audioContext.createBiquadFilter()
-
-    filter.type = "lowpass"
-    filter.frequency.setValueAtTime(200, this.audioContext.currentTime)
-    filter.frequency.linearRampToValueAtTime(800, this.audioContext.currentTime + duration * 0.3)
-    filter.frequency.linearRampToValueAtTime(400, this.audioContext.currentTime + duration)
-
-    osc.type = "sawtooth"
-    osc.frequency.setValueAtTime(80, this.audioContext.currentTime)
-    osc.frequency.linearRampToValueAtTime(200, this.audioContext.currentTime + duration * 0.4)
-    osc.frequency.linearRampToValueAtTime(100, this.audioContext.currentTime + duration)
-
-    gain.gain.setValueAtTime(0.08, this.audioContext.currentTime)
-    gain.gain.linearRampToValueAtTime(0.15, this.audioContext.currentTime + duration * 0.3)
-    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
-
-    osc.connect(filter)
-    filter.connect(gain)
-    gain.connect(this.masterGain)
-
-    osc.start()
-    osc.stop(this.audioContext.currentTime + duration)
-  }
-
-  // Flash de sincronizacion (pop electrico)
   playSyncFlash() {
     if (!this.audioContext || !this.masterGain || this.isMuted) return
 
     const osc = this.audioContext.createOscillator()
+    const osc2 = this.audioContext.createOscillator()
     const gain = this.audioContext.createGain()
 
     osc.type = "sine"
-    osc.frequency.setValueAtTime(1000, this.audioContext.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.1)
+    osc.frequency.setValueAtTime(2000, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + 0.15)
 
-    gain.gain.setValueAtTime(0.2, this.audioContext.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15)
+    osc2.type = "square"
+    osc2.frequency.setValueAtTime(100, this.audioContext.currentTime)
+
+    gain.gain.setValueAtTime(0.25, this.audioContext.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.2)
 
     osc.connect(gain)
+    osc2.connect(gain)
     gain.connect(this.masterGain)
 
     osc.start()
-    osc.stop(this.audioContext.currentTime + 0.15)
+    osc2.start()
+    osc.stop(this.audioContext.currentTime + 0.2)
+    osc2.stop(this.audioContext.currentTime + 0.2)
   }
 
-  // Sonido de click de boton
   playButtonClick() {
     if (!this.audioContext || !this.masterGain || this.isMuted) return
 
@@ -230,7 +306,7 @@ class CRTSoundEngine {
     osc.type = "sine"
     osc.frequency.value = 800
 
-    gain.gain.setValueAtTime(0.1, this.audioContext.currentTime)
+    gain.gain.setValueAtTime(0.08, this.audioContext.currentTime)
     gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05)
 
     osc.connect(gain)
@@ -270,7 +346,6 @@ export default function MainScreen({
   const flybackRef = useRef<{ stop: () => void } | null>(null)
   const [mousePosition, setMousePosition] = useState({ x: 0.5, y: 0.5 })
 
-  // Inicializar motor de sonido
   useEffect(() => {
     soundEngineRef.current = new CRTSoundEngine()
   }, [])
@@ -289,26 +364,29 @@ export default function MainScreen({
       soundEngineRef.current.init()
       setTvAnimation("turning-on")
 
-      // Click de encendido
+      // Click de power
       soundEngineRef.current.playPowerClick()
 
-      // Degauss despues del click
-      setTimeout(() => soundEngineRef.current?.playDegauss(), 100)
+      // Carga de alta tension
+      setTimeout(() => soundEngineRef.current?.playHighVoltageCharge(), 150)
 
-      // Estatica durante la linea horizontal
-      setTimeout(() => soundEngineRef.current?.playStatic(1.5), 400)
+      // Degauss
+      setTimeout(() => soundEngineRef.current?.playDegauss(), 300)
 
-      // Expansion vertical con sonido magnetico
-      setTimeout(() => soundEngineRef.current?.playVerticalExpand(), 1200)
+      // Estatica inicial
+      setTimeout(() => soundEngineRef.current?.playStatic(1.2), 600)
+
+      // Expansion del haz
+      setTimeout(() => soundEngineRef.current?.playBeamExpand(), 1400)
 
       // Flash de sincronizacion
-      setTimeout(() => soundEngineRef.current?.playSyncFlash(), 2400)
+      setTimeout(() => soundEngineRef.current?.playSyncFlash(), 2600)
 
-      // Iniciar flyback whine y hum continuo
+      // Sonidos continuos
       setTimeout(() => {
         flybackRef.current = soundEngineRef.current?.playFlybackWhine() || null
         humRef.current = soundEngineRef.current?.playHum() || null
-      }, 2600)
+      }, 2800)
 
       setTimeout(() => {
         setTvAnimation("on")
@@ -316,7 +394,7 @@ export default function MainScreen({
           setEffectsEnabled(true)
           setContentVisible(true)
         }, 500)
-      }, 2800)
+      }, 3000)
     }
 
     return () => {
@@ -325,12 +403,11 @@ export default function MainScreen({
     }
   }, [tvTurnedOn])
 
-  // Musica de fondo
   useEffect(() => {
     if (tvAnimation === "on" && !audioRef.current) {
       audioRef.current = new Audio("https://assets.mixkit.co/music/preview/mixkit-sleepy-cat-135.mp3")
       audioRef.current.loop = true
-      audioRef.current.volume = 0.12
+      audioRef.current.volume = 0.1
       audioRef.current.muted = isMuted
       audioRef.current.play().catch(() => {})
     }
@@ -381,16 +458,12 @@ export default function MainScreen({
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
-      {/* Fondo negro base */}
       <div className="absolute inset-0 bg-black z-0" />
 
-      {/* Animacion de encendido */}
       {tvAnimation === "turning-on" && <TvTurnOnAnimation />}
 
-      {/* Contenido principal */}
       {tvAnimation === "on" && (
         <>
-          {/* Imagen de fondo con parallax */}
           <div
             className="absolute inset-0 z-10 transition-all duration-500 ease-out"
             style={{
@@ -404,7 +477,6 @@ export default function MainScreen({
             }}
           />
 
-          {/* Vignette */}
           <div
             className="absolute inset-0 z-20 transition-opacity duration-1000"
             style={{
@@ -414,12 +486,10 @@ export default function MainScreen({
             }}
           />
 
-          {/* UI Content */}
           <div
             className="relative z-30 w-full h-full flex flex-col transition-opacity duration-700"
             style={{ opacity: contentVisible ? 1 : 0 }}
           >
-            {/* Botones superiores */}
             <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 md:gap-3">
               <button
                 onClick={() => {
@@ -444,7 +514,6 @@ export default function MainScreen({
 
             <div className="flex-1" />
 
-            {/* Boton principal */}
             <div className="flex flex-col items-center pb-8 md:pb-16">
               <p
                 className="text-white/40 text-[10px] md:text-xs uppercase tracking-[0.4em] md:tracking-[0.5em] mb-2 md:mb-3 font-mono"
@@ -503,7 +572,6 @@ export default function MainScreen({
             </div>
           </div>
 
-          {/* VHS Effects */}
           {effectsEnabled && <VhsEffects intensity={vhsIntensity} />}
         </>
       )}
@@ -513,202 +581,139 @@ export default function MainScreen({
 
 function TvTurnOnAnimation() {
   const [phase, setPhase] = useState(0)
-  const [staticNoise, setStaticNoise] = useState<number[]>([])
 
   useEffect(() => {
-    const noiseInterval = setInterval(() => {
-      setStaticNoise(Array.from({ length: 50 }, () => Math.random()))
-    }, 50)
-
-    const phases = [50, 150, 300, 500, 750, 1000, 1200, 1500, 1800, 2100, 2400, 2600, 2800]
+    const phases = [
+      50, // 1: punto inicial
+      150, // 2: punto pulsando
+      350, // 3: punto mas brillante
+      550, // 4: inicio linea horizontal
+      800, // 5: linea expandiendose
+      1100, // 6: linea completa
+      1400, // 7: flicker
+      1700, // 8: inicio expansion vertical
+      2000, // 9: expansion vertical media
+      2300, // 10: expansion casi completa
+      2600, // 11: flash
+      2900, // 12: finalizado
+    ]
     phases.forEach((delay, index) => {
       setTimeout(() => setPhase(index + 1), delay)
     })
-
-    return () => clearInterval(noiseInterval)
   }, [])
 
   return (
     <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden">
       <div className="absolute inset-0 bg-black" />
 
-      {/* Punto inicial */}
+      {/* Punto inicial brillante */}
       {phase >= 1 && phase <= 5 && (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            className="rounded-full"
             style={{
-              width: phase <= 2 ? "30px" : "50px",
-              height: phase <= 2 ? "30px" : "50px",
-              background: "radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)",
-              opacity: phase * 0.3,
-              transition: "all 0.15s ease-out",
-            }}
-          />
-          <div
-            className="rounded-full bg-white"
-            style={{
-              width: phase === 1 ? "2px" : phase === 2 ? "4px" : "3px",
-              height: phase === 1 ? "2px" : phase === 2 ? "4px" : "3px",
+              width: phase <= 2 ? "4px" : phase <= 3 ? "6px" : "4px",
+              height: phase <= 2 ? "4px" : phase <= 3 ? "6px" : "4px",
+              backgroundColor: "white",
               boxShadow: `
-                0 0 ${5 + phase * 3}px ${2 + phase}px rgba(255,255,255,0.95),
-                0 0 ${15 + phase * 5}px ${4 + phase * 2}px rgba(220,230,255,0.7),
-                0 0 ${25 + phase * 8}px ${6 + phase * 3}px rgba(180,200,255,0.4)
+                0 0 ${10 + phase * 5}px ${5 + phase * 2}px rgba(255,255,255,0.9),
+                0 0 ${20 + phase * 10}px ${10 + phase * 4}px rgba(200,220,255,0.6),
+                0 0 ${40 + phase * 15}px ${15 + phase * 5}px rgba(150,180,255,0.3)
               `,
-              animation: phase === 2 ? "crtPointPulse 0.08s ease-in-out infinite" : "none",
-              transition: "all 0.1s ease-out",
+              animation: phase === 2 ? "pulse 0.1s ease-in-out infinite" : "none",
             }}
           />
         </div>
       )}
 
-      {/* Linea horizontal */}
+      {/* Linea horizontal expandiendose */}
       {phase >= 4 && phase <= 7 && (
         <div
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
           style={{
-            width: phase === 4 ? "8%" : phase === 5 ? "35%" : phase === 6 ? "70%" : "100%",
-            height: phase <= 5 ? "2px" : "3px",
-            background:
-              "linear-gradient(90deg, rgba(200,210,255,0.5) 0%, rgba(255,255,255,1) 20%, rgba(255,255,255,1) 80%, rgba(200,210,255,0.5) 100%)",
-            borderRadius: "2px",
+            width: phase === 4 ? "20px" : phase === 5 ? "40%" : phase === 6 ? "80%" : "100%",
+            height: "3px",
+            background: "linear-gradient(90deg, transparent 0%, white 20%, white 80%, transparent 100%)",
             boxShadow: `
-              0 0 10px 2px rgba(255,255,255,0.9),
-              0 0 25px 5px rgba(200,220,255,0.7),
-              0 0 50px 10px rgba(150,180,255,0.4)
+              0 0 20px 5px rgba(255,255,255,0.8),
+              0 0 40px 10px rgba(200,220,255,0.5),
+              0 0 60px 15px rgba(150,180,255,0.3)
             `,
-            transition: "width 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+            transition: "width 0.25s ease-out",
+            opacity: phase === 7 ? (Math.random() > 0.5 ? 1 : 0.3) : 1,
           }}
         />
-      )}
-
-      {/* Estatica */}
-      {phase === 7 && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative" style={{ width: "100%", height: "6px", overflow: "hidden" }}>
-            {staticNoise.slice(0, 20).map((n, i) => (
-              <div
-                key={i}
-                className="absolute bg-white"
-                style={{
-                  left: `${i * 5}%`,
-                  width: `${2 + n * 3}%`,
-                  height: "100%",
-                  opacity: 0.3 + n * 0.5,
-                  filter: "blur(0.5px)",
-                }}
-              />
-            ))}
-          </div>
-        </div>
       )}
 
       {/* Expansion vertical */}
       {phase >= 8 && phase <= 11 && (
         <div
-          className="absolute left-0 right-0 top-1/2 overflow-hidden"
+          className="absolute left-0 right-0 top-1/2 -translate-y-1/2 overflow-hidden"
           style={{
             height: phase === 8 ? "10%" : phase === 9 ? "40%" : phase === 10 ? "80%" : "100%",
-            transform: "translateY(-50%)",
-            transition: "height 0.28s cubic-bezier(0.22, 0.61, 0.36, 1)",
+            transition: "height 0.3s ease-out",
           }}
         >
+          {/* Contenido con estatica */}
           <div
             className="absolute inset-0"
             style={{
-              background: `linear-gradient(180deg, 
-                rgba(200,220,255,0.3) 0%, 
-                rgba(255,255,255,0.95) 5%, 
-                rgba(255,255,255,1) 50%, 
-                rgba(255,255,255,0.95) 95%, 
-                rgba(200,220,255,0.3) 100%
-              )`,
+              background:
+                phase <= 10
+                  ? `repeating-linear-gradient(
+                    0deg,
+                    rgba(255,255,255,0.03) 0px,
+                    rgba(255,255,255,0.03) 1px,
+                    transparent 1px,
+                    transparent 2px
+                  )`
+                  : "transparent",
             }}
           />
+
+          {/* Scanlines durante expansion */}
           <div
             className="absolute inset-0"
             style={{
-              background: `repeating-linear-gradient(
-                0deg,
-                transparent 0px,
-                transparent 2px,
-                rgba(0,0,0,0.08) 2px,
-                rgba(0,0,0,0.08) 4px
-              )`,
+              background:
+                "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px)",
+              opacity: phase <= 10 ? 0.5 : 0,
             }}
           />
-          {phase >= 9 && (
-            <div
-              className="absolute inset-0"
-              style={{
-                background: `repeating-linear-gradient(
-                  0deg,
-                  transparent 0%,
-                  rgba(0,0,0,0.05) 25%,
-                  transparent 50%
-                )`,
-                backgroundSize: "100% 60px",
-                animation: "crtRolling 0.3s linear infinite",
-              }}
-            />
-          )}
+
+          {/* Glow de bordes */}
+          <div
+            className="absolute inset-x-0 top-0 h-4"
+            style={{
+              background: "linear-gradient(to bottom, rgba(255,255,255,0.5), transparent)",
+            }}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 h-4"
+            style={{
+              background: "linear-gradient(to top, rgba(255,255,255,0.5), transparent)",
+            }}
+          />
         </div>
       )}
 
-      {/* Flash */}
-      {phase === 12 && (
+      {/* Flash final */}
+      {phase === 11 && (
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 bg-white"
           style={{
-            background:
-              "radial-gradient(ellipse at center, rgba(255,255,255,1) 0%, rgba(220,230,255,0.9) 50%, rgba(180,200,255,0.7) 100%)",
-            animation: "crtSyncFlash 0.2s ease-out forwards",
+            animation: "flashFade 0.3s ease-out forwards",
           }}
         />
       )}
 
-      {/* Fade out */}
-      {phase === 13 && (
-        <div className="absolute inset-0 bg-white" style={{ animation: "crtFadeOut 0.35s ease-out forwards" }} />
-      )}
-
-      {/* Borde CRT */}
-      {phase >= 4 && phase <= 12 && (
-        <>
-          <div
-            className="absolute inset-0"
-            style={{
-              boxShadow: "inset 0 0 60px 25px rgba(0,0,0,0.6), inset 0 0 120px 50px rgba(0,0,0,0.3)",
-              borderRadius: "4%",
-            }}
-          />
-          <div
-            className="absolute top-0 left-[10%] right-[10%] h-[20%]"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%)",
-              borderRadius: "50% 50% 0 0",
-              opacity: phase >= 8 ? 0.6 : 0,
-              transition: "opacity 0.3s ease-out",
-            }}
-          />
-        </>
-      )}
-
       <style jsx>{`
-        @keyframes crtPointPulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.3); }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.2); }
         }
-        @keyframes crtRolling {
-          0% { transform: translateY(0); }
-          100% { transform: translateY(60px); }
-        }
-        @keyframes crtSyncFlash {
-          0% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        @keyframes crtFadeOut {
-          0% { opacity: 1; }
+        @keyframes flashFade {
+          0% { opacity: 0.8; }
           100% { opacity: 0; }
         }
       `}</style>
