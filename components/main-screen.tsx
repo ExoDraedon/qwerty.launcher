@@ -1,9 +1,245 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Settings, Volume2, VolumeX, Loader2 } from "lucide-react"
 import type { VhsIntensity } from "@/app/page"
 import VhsEffects from "./vhs-effects"
+
+class CRTSoundEngine {
+  private audioContext: AudioContext | null = null
+  private masterGain: GainNode | null = null
+  private isMuted = false
+
+  init() {
+    if (this.audioContext) return
+    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    this.masterGain = this.audioContext.createGain()
+    this.masterGain.connect(this.audioContext.destination)
+    this.masterGain.gain.value = 0.6
+  }
+
+  setMuted(muted: boolean) {
+    this.isMuted = muted
+    if (this.masterGain) {
+      this.masterGain.gain.value = muted ? 0 : 0.6
+    }
+  }
+
+  // Sonido de degauss/encendido inicial del CRT
+  playDegauss() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const duration = 0.8
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+
+    filter.type = "lowpass"
+    filter.frequency.setValueAtTime(800, this.audioContext.currentTime)
+    filter.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + duration)
+
+    osc.type = "sawtooth"
+    osc.frequency.setValueAtTime(120, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + duration)
+
+    gain.gain.setValueAtTime(0.25, this.audioContext.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
+
+    osc.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + duration)
+  }
+
+  // Sonido de alta tension del flyback transformer
+  playFlybackWhine() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+
+    osc.type = "sine"
+    osc.frequency.setValueAtTime(15734, this.audioContext.currentTime) // Frecuencia real del flyback NTSC
+
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime)
+    gain.gain.linearRampToValueAtTime(0.015, this.audioContext.currentTime + 0.3)
+    gain.gain.setValueAtTime(0.015, this.audioContext.currentTime + 2)
+    gain.gain.linearRampToValueAtTime(0.008, this.audioContext.currentTime + 4)
+
+    osc.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+
+    return {
+      stop: () => {
+        gain.gain.linearRampToValueAtTime(0, this.audioContext!.currentTime + 0.5)
+        setTimeout(() => osc.stop(), 500)
+      },
+    }
+  }
+
+  // Estatica de TV
+  playStatic(duration = 2) {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const bufferSize = this.audioContext.sampleRate * duration
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.5
+    }
+
+    const source = this.audioContext.createBufferSource()
+    const gain = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+
+    filter.type = "bandpass"
+    filter.frequency.value = 3000
+    filter.Q.value = 0.5
+
+    source.buffer = buffer
+    gain.gain.setValueAtTime(0.15, this.audioContext.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
+
+    source.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.masterGain)
+
+    source.start()
+
+    return { stop: () => source.stop() }
+  }
+
+  // Click de encendido de switch
+  playPowerClick() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+
+    osc.type = "square"
+    osc.frequency.setValueAtTime(150, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + 0.05)
+
+    gain.gain.setValueAtTime(0.3, this.audioContext.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.08)
+
+    osc.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.08)
+  }
+
+  // Zumbido electrico de CRT (60Hz hum)
+  playHum() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const osc = this.audioContext.createOscillator()
+    const osc2 = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+
+    osc.type = "sine"
+    osc.frequency.value = 60 // 60Hz hum
+    osc2.type = "sine"
+    osc2.frequency.value = 120 // Armonico
+
+    gain.gain.value = 0.02
+
+    osc.connect(gain)
+    osc2.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc2.start()
+
+    return {
+      stop: () => {
+        gain.gain.linearRampToValueAtTime(0, this.audioContext!.currentTime + 0.3)
+        setTimeout(() => {
+          osc.stop()
+          osc2.stop()
+        }, 300)
+      },
+    }
+  }
+
+  // Sonido de expansion vertical (woosh magnetico)
+  playVerticalExpand() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const duration = 1.2
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+
+    filter.type = "lowpass"
+    filter.frequency.setValueAtTime(200, this.audioContext.currentTime)
+    filter.frequency.linearRampToValueAtTime(800, this.audioContext.currentTime + duration * 0.3)
+    filter.frequency.linearRampToValueAtTime(400, this.audioContext.currentTime + duration)
+
+    osc.type = "sawtooth"
+    osc.frequency.setValueAtTime(80, this.audioContext.currentTime)
+    osc.frequency.linearRampToValueAtTime(200, this.audioContext.currentTime + duration * 0.4)
+    osc.frequency.linearRampToValueAtTime(100, this.audioContext.currentTime + duration)
+
+    gain.gain.setValueAtTime(0.08, this.audioContext.currentTime)
+    gain.gain.linearRampToValueAtTime(0.15, this.audioContext.currentTime + duration * 0.3)
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
+
+    osc.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + duration)
+  }
+
+  // Flash de sincronizacion (pop electrico)
+  playSyncFlash() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+
+    osc.type = "sine"
+    osc.frequency.setValueAtTime(1000, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.1)
+
+    gain.gain.setValueAtTime(0.2, this.audioContext.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15)
+
+    osc.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.15)
+  }
+
+  // Sonido de click de boton
+  playButtonClick() {
+    if (!this.audioContext || !this.masterGain || this.isMuted) return
+
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+
+    osc.type = "sine"
+    osc.frequency.value = 800
+
+    gain.gain.setValueAtTime(0.1, this.audioContext.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05)
+
+    osc.connect(gain)
+    gain.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.05)
+  }
+}
 
 interface MainScreenProps {
   tvTurnedOn: boolean
@@ -29,65 +265,73 @@ export default function MainScreen({
   const [effectsEnabled, setEffectsEnabled] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const tvOnSoundRef = useRef<HTMLAudioElement | null>(null)
-  const staticSoundRef = useRef<HTMLAudioElement | null>(null)
-  const humSoundRef = useRef<HTMLAudioElement | null>(null)
+  const soundEngineRef = useRef<CRTSoundEngine | null>(null)
+  const humRef = useRef<{ stop: () => void } | null>(null)
+  const flybackRef = useRef<{ stop: () => void } | null>(null)
   const [mousePosition, setMousePosition] = useState({ x: 0.5, y: 0.5 })
 
+  // Inicializar motor de sonido
   useEffect(() => {
-    if (tvTurnedOn) {
+    soundEngineRef.current = new CRTSoundEngine()
+  }, [])
+
+  useEffect(() => {
+    if (soundEngineRef.current) {
+      soundEngineRef.current.setMuted(isMuted)
+    }
+    if (audioRef.current) {
+      audioRef.current.muted = isMuted
+    }
+  }, [isMuted])
+
+  useEffect(() => {
+    if (tvTurnedOn && soundEngineRef.current) {
+      soundEngineRef.current.init()
       setTvAnimation("turning-on")
 
-      if (!isMuted) {
-        // Sonido de encendido CRT
-        tvOnSoundRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/209/209-preview.mp3")
-        tvOnSoundRef.current.volume = 0.4
-        tvOnSoundRef.current.play().catch(() => {})
+      // Click de encendido
+      soundEngineRef.current.playPowerClick()
 
-        // Sonido de estatica suave
-        staticSoundRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3")
-        staticSoundRef.current.volume = 0.15
-        staticSoundRef.current.loop = true
-        setTimeout(() => {
-          staticSoundRef.current?.play().catch(() => {})
-        }, 300)
-      }
+      // Degauss despues del click
+      setTimeout(() => soundEngineRef.current?.playDegauss(), 100)
+
+      // Estatica durante la linea horizontal
+      setTimeout(() => soundEngineRef.current?.playStatic(1.5), 400)
+
+      // Expansion vertical con sonido magnetico
+      setTimeout(() => soundEngineRef.current?.playVerticalExpand(), 1200)
+
+      // Flash de sincronizacion
+      setTimeout(() => soundEngineRef.current?.playSyncFlash(), 2400)
+
+      // Iniciar flyback whine y hum continuo
+      setTimeout(() => {
+        flybackRef.current = soundEngineRef.current?.playFlybackWhine() || null
+        humRef.current = soundEngineRef.current?.playHum() || null
+      }, 2600)
 
       setTimeout(() => {
         setTvAnimation("on")
-
-        if (staticSoundRef.current) {
-          const fadeOut = setInterval(() => {
-            if (staticSoundRef.current && staticSoundRef.current.volume > 0.02) {
-              staticSoundRef.current.volume -= 0.02
-            } else {
-              clearInterval(fadeOut)
-              staticSoundRef.current?.pause()
-            }
-          }, 50)
-        }
-
-        // Sonido de hum electrico de CRT
-        if (!isMuted) {
-          humSoundRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3")
-          humSoundRef.current.volume = 0.05
-          humSoundRef.current.loop = true
-          humSoundRef.current.play().catch(() => {})
-        }
-
         setTimeout(() => {
           setEffectsEnabled(true)
           setContentVisible(true)
         }, 500)
       }, 2800)
     }
-  }, [tvTurnedOn, isMuted])
 
+    return () => {
+      humRef.current?.stop()
+      flybackRef.current?.stop()
+    }
+  }, [tvTurnedOn])
+
+  // Musica de fondo
   useEffect(() => {
     if (tvAnimation === "on" && !audioRef.current) {
       audioRef.current = new Audio("https://assets.mixkit.co/music/preview/mixkit-sleepy-cat-135.mp3")
       audioRef.current.loop = true
-      audioRef.current.volume = 0.15
+      audioRef.current.volume = 0.12
+      audioRef.current.muted = isMuted
       audioRef.current.play().catch(() => {})
     }
     return () => {
@@ -96,19 +340,7 @@ export default function MainScreen({
         audioRef.current = null
       }
     }
-  }, [tvAnimation])
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.muted = isMuted
-    }
-    if (humSoundRef.current) {
-      humSoundRef.current.muted = isMuted
-    }
-    if (staticSoundRef.current) {
-      staticSoundRef.current.muted = isMuted
-    }
-  }, [isMuted])
+  }, [tvAnimation, isMuted])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -134,27 +366,28 @@ export default function MainScreen({
     }
   }, [])
 
-  // Cleanup sonidos
-  useEffect(() => {
-    return () => {
-      tvOnSoundRef.current?.pause()
-      staticSoundRef.current?.pause()
-      humSoundRef.current?.pause()
-    }
-  }, [])
-
   const parallaxX = (mousePosition.x - 0.5) * 15
   const parallaxY = (mousePosition.y - 0.5) * 10
 
+  const handleSettingsClick = useCallback(() => {
+    soundEngineRef.current?.playButtonClick()
+    onSettingsClick()
+  }, [onSettingsClick])
+
+  const handleProjectRivalsClick = useCallback(() => {
+    soundEngineRef.current?.playButtonClick()
+    onProjectRivalsClick()
+  }, [onProjectRivalsClick])
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
-      {/* Fondo negro base que siempre esta presente */}
+      {/* Fondo negro base */}
       <div className="absolute inset-0 bg-black z-0" />
 
-      {/* Animacion de encendido - siempre encima de todo con z-50 */}
+      {/* Animacion de encendido */}
       {tvAnimation === "turning-on" && <TvTurnOnAnimation />}
 
-      {/* Contenido principal - solo se muestra cuando tvAnimation === "on" */}
+      {/* Contenido principal */}
       {tvAnimation === "on" && (
         <>
           {/* Imagen de fondo con parallax */}
@@ -186,10 +419,13 @@ export default function MainScreen({
             className="relative z-30 w-full h-full flex flex-col transition-opacity duration-700"
             style={{ opacity: contentVisible ? 1 : 0 }}
           >
-            {/* Botones y contenido */}
+            {/* Botones superiores */}
             <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 md:gap-3">
               <button
-                onClick={() => setIsMuted(!isMuted)}
+                onClick={() => {
+                  soundEngineRef.current?.playButtonClick()
+                  setIsMuted(!isMuted)
+                }}
                 className="p-2 md:p-3 bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all duration-300 group"
               >
                 {isMuted ? (
@@ -199,7 +435,7 @@ export default function MainScreen({
                 )}
               </button>
               <button
-                onClick={onSettingsClick}
+                onClick={handleSettingsClick}
                 className="p-2 md:p-3 bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all duration-300 group"
               >
                 <Settings className="w-4 h-4 md:w-5 md:h-5 text-white/60 group-hover:text-white group-hover:rotate-90 transition-all duration-500" />
@@ -208,6 +444,7 @@ export default function MainScreen({
 
             <div className="flex-1" />
 
+            {/* Boton principal */}
             <div className="flex flex-col items-center pb-8 md:pb-16">
               <p
                 className="text-white/40 text-[10px] md:text-xs uppercase tracking-[0.4em] md:tracking-[0.5em] mb-2 md:mb-3 font-mono"
@@ -221,7 +458,7 @@ export default function MainScreen({
               </p>
 
               <button
-                onClick={onProjectRivalsClick}
+                onClick={handleProjectRivalsClick}
                 disabled={isConnecting}
                 className={`relative group mb-6 md:mb-8 transform transition-all duration-300 ${
                   isConnecting ? "cursor-wait scale-95" : "cursor-pointer hover:scale-105"
@@ -266,7 +503,7 @@ export default function MainScreen({
             </div>
           </div>
 
-          {/* VHS Effects - solo cuando effectsEnabled es true */}
+          {/* VHS Effects */}
           {effectsEnabled && <VhsEffects intensity={vhsIntensity} />}
         </>
       )}
@@ -279,26 +516,11 @@ function TvTurnOnAnimation() {
   const [staticNoise, setStaticNoise] = useState<number[]>([])
 
   useEffect(() => {
-    // Generar ruido estatico aleatorio
     const noiseInterval = setInterval(() => {
       setStaticNoise(Array.from({ length: 50 }, () => Math.random()))
     }, 50)
 
-    const phases = [
-      50, // 1: Punto inicial
-      150, // 2: Punto pulsa mas grande
-      300, // 3: Punto brilla intenso
-      500, // 4: Linea horizontal inicial
-      750, // 5: Linea se expande con glow
-      1000, // 6: Linea completa
-      1200, // 7: Estatica aparece
-      1500, // 8: Expansion vertical comienza
-      1800, // 9: Expansion vertical media con rolling
-      2100, // 10: Casi completo con interferencia
-      2400, // 11: Pantalla llena con ajuste
-      2600, // 12: Flash de sincronizacion
-      2800, // 13: Fade out suave
-    ]
+    const phases = [50, 150, 300, 500, 750, 1000, 1200, 1500, 1800, 2100, 2400, 2600, 2800]
     phases.forEach((delay, index) => {
       setTimeout(() => setPhase(index + 1), delay)
     })
@@ -308,13 +530,11 @@ function TvTurnOnAnimation() {
 
   return (
     <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden">
-      {/* Fondo negro absoluto */}
       <div className="absolute inset-0 bg-black" />
 
-      {/* Fase 1-3: Punto central con efecto de fosforo calentandose */}
+      {/* Punto inicial */}
       {phase >= 1 && phase <= 5 && (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          {/* Glow exterior */}
           <div
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
             style={{
@@ -325,7 +545,6 @@ function TvTurnOnAnimation() {
               transition: "all 0.15s ease-out",
             }}
           />
-          {/* Punto central */}
           <div
             className="rounded-full bg-white"
             style={{
@@ -343,7 +562,7 @@ function TvTurnOnAnimation() {
         </div>
       )}
 
-      {/* Fase 4-6: Linea horizontal expandiendose como CRT real */}
+      {/* Linea horizontal */}
       {phase >= 4 && phase <= 7 && (
         <div
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
@@ -356,15 +575,14 @@ function TvTurnOnAnimation() {
             boxShadow: `
               0 0 10px 2px rgba(255,255,255,0.9),
               0 0 25px 5px rgba(200,220,255,0.7),
-              0 0 50px 10px rgba(150,180,255,0.4),
-              0 0 80px 20px rgba(100,140,255,0.2)
+              0 0 50px 10px rgba(150,180,255,0.4)
             `,
             transition: "width 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
           }}
         />
       )}
 
-      {/* Fase 7: Estatica/ruido antes de expansion vertical */}
+      {/* Estatica */}
       {phase === 7 && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="relative" style={{ width: "100%", height: "6px", overflow: "hidden" }}>
@@ -385,7 +603,7 @@ function TvTurnOnAnimation() {
         </div>
       )}
 
-      {/* Fase 8-11: Expansion vertical con efecto rolling de CRT */}
+      {/* Expansion vertical */}
       {phase >= 8 && phase <= 11 && (
         <div
           className="absolute left-0 right-0 top-1/2 overflow-hidden"
@@ -395,7 +613,6 @@ function TvTurnOnAnimation() {
             transition: "height 0.28s cubic-bezier(0.22, 0.61, 0.36, 1)",
           }}
         >
-          {/* Gradiente de borde suave */}
           <div
             className="absolute inset-0"
             style={{
@@ -408,8 +625,6 @@ function TvTurnOnAnimation() {
               )`,
             }}
           />
-
-          {/* Lineas de escaneo */}
           <div
             className="absolute inset-0"
             style={{
@@ -420,11 +635,8 @@ function TvTurnOnAnimation() {
                 rgba(0,0,0,0.08) 2px,
                 rgba(0,0,0,0.08) 4px
               )`,
-              animation: "crtScanlines 0.1s steps(2) infinite",
             }}
           />
-
-          {/* Efecto rolling/ondulacion */}
           {phase >= 9 && (
             <div
               className="absolute inset-0"
@@ -440,38 +652,10 @@ function TvTurnOnAnimation() {
               }}
             />
           )}
-
-          {/* Distorsion horizontal sutil */}
-          {phase >= 10 && (
-            <>
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute left-0 right-0"
-                  style={{
-                    top: `${25 + i * 25}%`,
-                    height: "2px",
-                    background: "rgba(0,0,0,0.1)",
-                    transform: `translateX(${(staticNoise[i] || 0) * 4 - 2}px)`,
-                    filter: "blur(0.5px)",
-                  }}
-                />
-              ))}
-            </>
-          )}
-
-          {/* Ruido estatico sutil */}
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-              animation: "crtNoise 0.05s steps(4) infinite",
-            }}
-          />
         </div>
       )}
 
-      {/* Fase 12: Flash de sincronizacion */}
+      {/* Flash */}
       {phase === 12 && (
         <div
           className="absolute inset-0"
@@ -483,32 +667,21 @@ function TvTurnOnAnimation() {
         />
       )}
 
-      {/* Fase 13: Fade out */}
+      {/* Fade out */}
       {phase === 13 && (
-        <div
-          className="absolute inset-0 bg-white"
-          style={{
-            animation: "crtFadeOut 0.35s ease-out forwards",
-          }}
-        />
+        <div className="absolute inset-0 bg-white" style={{ animation: "crtFadeOut 0.35s ease-out forwards" }} />
       )}
 
-      {/* Borde de pantalla CRT curva - durante toda la animacion */}
+      {/* Borde CRT */}
       {phase >= 4 && phase <= 12 && (
         <>
-          {/* Sombra interior */}
           <div
             className="absolute inset-0"
             style={{
-              boxShadow: `
-                inset 0 0 60px 25px rgba(0,0,0,0.6),
-                inset 0 0 120px 50px rgba(0,0,0,0.3)
-              `,
+              boxShadow: "inset 0 0 60px 25px rgba(0,0,0,0.6), inset 0 0 120px 50px rgba(0,0,0,0.3)",
               borderRadius: "4%",
-              pointerEvents: "none",
             }}
           />
-          {/* Reflejo superior sutil */}
           <div
             className="absolute top-0 left-[10%] right-[10%] h-[20%]"
             style={{
@@ -523,31 +696,19 @@ function TvTurnOnAnimation() {
 
       <style jsx>{`
         @keyframes crtPointPulse {
-          0%, 100% { transform: scale(1); filter: brightness(1); }
-          50% { transform: scale(1.3); filter: brightness(1.3); }
-        }
-        @keyframes crtScanlines {
-          0% { transform: translateY(0); }
-          100% { transform: translateY(4px); }
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.3); }
         }
         @keyframes crtRolling {
           0% { transform: translateY(0); }
           100% { transform: translateY(60px); }
         }
-        @keyframes crtNoise {
-          0% { transform: translate(0, 0); }
-          25% { transform: translate(-1%, 1%); }
-          50% { transform: translate(1%, -1%); }
-          75% { transform: translate(-1%, -1%); }
-          100% { transform: translate(1%, 1%); }
-        }
         @keyframes crtSyncFlash {
-          0% { opacity: 1; filter: brightness(1.5) saturate(0.8); }
-          40% { opacity: 1; filter: brightness(1.8) saturate(0.5); }
-          100% { opacity: 0.95; filter: brightness(1) saturate(1); }
+          0% { opacity: 1; }
+          100% { opacity: 0; }
         }
         @keyframes crtFadeOut {
-          0% { opacity: 0.95; }
+          0% { opacity: 1; }
           100% { opacity: 0; }
         }
       `}</style>
