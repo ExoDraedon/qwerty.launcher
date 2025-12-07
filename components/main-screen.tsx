@@ -29,20 +29,59 @@ export default function MainScreen({
   const [effectsEnabled, setEffectsEnabled] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const tvOnSoundRef = useRef<HTMLAudioElement | null>(null)
+  const staticSoundRef = useRef<HTMLAudioElement | null>(null)
+  const humSoundRef = useRef<HTMLAudioElement | null>(null)
   const [mousePosition, setMousePosition] = useState({ x: 0.5, y: 0.5 })
 
   useEffect(() => {
     if (tvTurnedOn) {
       setTvAnimation("turning-on")
+
+      if (!isMuted) {
+        // Sonido de encendido CRT
+        tvOnSoundRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/209/209-preview.mp3")
+        tvOnSoundRef.current.volume = 0.4
+        tvOnSoundRef.current.play().catch(() => {})
+
+        // Sonido de estatica suave
+        staticSoundRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3")
+        staticSoundRef.current.volume = 0.15
+        staticSoundRef.current.loop = true
+        setTimeout(() => {
+          staticSoundRef.current?.play().catch(() => {})
+        }, 300)
+      }
+
       setTimeout(() => {
         setTvAnimation("on")
+
+        if (staticSoundRef.current) {
+          const fadeOut = setInterval(() => {
+            if (staticSoundRef.current && staticSoundRef.current.volume > 0.02) {
+              staticSoundRef.current.volume -= 0.02
+            } else {
+              clearInterval(fadeOut)
+              staticSoundRef.current?.pause()
+            }
+          }, 50)
+        }
+
+        // Sonido de hum electrico de CRT
+        if (!isMuted) {
+          humSoundRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3")
+          humSoundRef.current.volume = 0.05
+          humSoundRef.current.loop = true
+          humSoundRef.current.play().catch(() => {})
+        }
+
         setTimeout(() => {
           setEffectsEnabled(true)
           setContentVisible(true)
         }, 500)
       }, 2800)
     }
-  }, [tvTurnedOn])
+  }, [tvTurnedOn, isMuted])
 
   useEffect(() => {
     if (tvAnimation === "on" && !audioRef.current) {
@@ -62,6 +101,12 @@ export default function MainScreen({
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.muted = isMuted
+    }
+    if (humSoundRef.current) {
+      humSoundRef.current.muted = isMuted
+    }
+    if (staticSoundRef.current) {
+      staticSoundRef.current.muted = isMuted
     }
   }, [isMuted])
 
@@ -86,6 +131,15 @@ export default function MainScreen({
     return () => {
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("deviceorientation", handleDeviceOrientation)
+    }
+  }, [])
+
+  // Cleanup sonidos
+  useEffect(() => {
+    return () => {
+      tvOnSoundRef.current?.pause()
+      staticSoundRef.current?.pause()
+      humSoundRef.current?.pause()
     }
   }, [])
 
@@ -222,243 +276,279 @@ export default function MainScreen({
 
 function TvTurnOnAnimation() {
   const [phase, setPhase] = useState(0)
+  const [staticNoise, setStaticNoise] = useState<number[]>([])
 
   useEffect(() => {
+    // Generar ruido estatico aleatorio
+    const noiseInterval = setInterval(() => {
+      setStaticNoise(Array.from({ length: 50 }, () => Math.random()))
+    }, 50)
+
     const phases = [
       50, // 1: Punto inicial
-      200, // 2: Punto pulsa
-      400, // 3: Linea horizontal inicial
-      600, // 4: Linea se expande
-      900, // 5: Linea completa con glow
-      1200, // 6: Primeros flickers verticales
-      1500, // 7: Expansion vertical comienza
-      1800, // 8: Expansion vertical media
-      2100, // 9: Casi completo con interferencia
-      2400, // 10: Pantalla llena
-      2600, // 11: Flash final
-      2800, // 12: Fade out
+      150, // 2: Punto pulsa mas grande
+      300, // 3: Punto brilla intenso
+      500, // 4: Linea horizontal inicial
+      750, // 5: Linea se expande con glow
+      1000, // 6: Linea completa
+      1200, // 7: Estatica aparece
+      1500, // 8: Expansion vertical comienza
+      1800, // 9: Expansion vertical media con rolling
+      2100, // 10: Casi completo con interferencia
+      2400, // 11: Pantalla llena con ajuste
+      2600, // 12: Flash de sincronizacion
+      2800, // 13: Fade out suave
     ]
     phases.forEach((delay, index) => {
       setTimeout(() => setPhase(index + 1), delay)
     })
+
+    return () => clearInterval(noiseInterval)
   }, [])
 
   return (
     <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden">
-      {/* Fondo negro base */}
+      {/* Fondo negro absoluto */}
       <div className="absolute inset-0 bg-black" />
 
-      {/* Fase 1-2: Punto central pulsante */}
-      {phase >= 1 && phase <= 4 && (
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
-          style={{
-            width: phase === 1 ? "3px" : phase === 2 ? "6px" : "4px",
-            height: phase === 1 ? "3px" : phase === 2 ? "6px" : "4px",
-            boxShadow: `
-              0 0 ${10 + phase * 5}px ${2 + phase * 2}px rgba(255,255,255,0.9),
-              0 0 ${20 + phase * 10}px ${5 + phase * 3}px rgba(200,220,255,0.6),
-              0 0 ${30 + phase * 15}px ${8 + phase * 4}px rgba(150,180,255,0.3)
-            `,
-            animation: phase === 2 ? "tvPulse 0.1s ease-in-out infinite" : "none",
-          }}
-        />
+      {/* Fase 1-3: Punto central con efecto de fosforo calentandose */}
+      {phase >= 1 && phase <= 5 && (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          {/* Glow exterior */}
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: phase <= 2 ? "30px" : "50px",
+              height: phase <= 2 ? "30px" : "50px",
+              background: "radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)",
+              opacity: phase * 0.3,
+              transition: "all 0.15s ease-out",
+            }}
+          />
+          {/* Punto central */}
+          <div
+            className="rounded-full bg-white"
+            style={{
+              width: phase === 1 ? "2px" : phase === 2 ? "4px" : "3px",
+              height: phase === 1 ? "2px" : phase === 2 ? "4px" : "3px",
+              boxShadow: `
+                0 0 ${5 + phase * 3}px ${2 + phase}px rgba(255,255,255,0.95),
+                0 0 ${15 + phase * 5}px ${4 + phase * 2}px rgba(220,230,255,0.7),
+                0 0 ${25 + phase * 8}px ${6 + phase * 3}px rgba(180,200,255,0.4)
+              `,
+              animation: phase === 2 ? "crtPointPulse 0.08s ease-in-out infinite" : "none",
+              transition: "all 0.1s ease-out",
+            }}
+          />
+        </div>
       )}
 
-      {/* Fase 3-5: Linea horizontal expandiendose */}
-      {phase >= 3 && phase <= 6 && (
+      {/* Fase 4-6: Linea horizontal expandiendose como CRT real */}
+      {phase >= 4 && phase <= 7 && (
         <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
           style={{
-            width: phase === 3 ? "15%" : phase === 4 ? "45%" : phase === 5 ? "80%" : "100%",
-            height: phase <= 4 ? "2px" : "3px",
+            width: phase === 4 ? "8%" : phase === 5 ? "35%" : phase === 6 ? "70%" : "100%",
+            height: phase <= 5 ? "2px" : "3px",
+            background:
+              "linear-gradient(90deg, rgba(200,210,255,0.5) 0%, rgba(255,255,255,1) 20%, rgba(255,255,255,1) 80%, rgba(200,210,255,0.5) 100%)",
             borderRadius: "2px",
             boxShadow: `
-              0 0 15px 3px rgba(255,255,255,0.9),
-              0 0 30px 8px rgba(200,220,255,0.6),
-              0 0 60px 15px rgba(150,180,255,0.3),
-              inset 0 0 10px 2px rgba(255,255,255,0.8)
+              0 0 10px 2px rgba(255,255,255,0.9),
+              0 0 25px 5px rgba(200,220,255,0.7),
+              0 0 50px 10px rgba(150,180,255,0.4),
+              0 0 80px 20px rgba(100,140,255,0.2)
             `,
-            transition: "all 0.2s ease-out",
+            transition: "width 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
           }}
         />
       )}
 
-      {/* Fase 6: Flickers/interferencia antes de expansion */}
-      {phase === 6 && (
-        <>
-          {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute left-0 right-0 bg-white/20"
-              style={{
-                height: `${Math.random() * 3 + 1}px`,
-                top: `${Math.random() * 100}%`,
-                animation: `tvFlicker ${0.05 + Math.random() * 0.1}s steps(2) infinite`,
-                animationDelay: `${Math.random() * 0.1}s`,
-              }}
-            />
-          ))}
-        </>
+      {/* Fase 7: Estatica/ruido antes de expansion vertical */}
+      {phase === 7 && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative" style={{ width: "100%", height: "6px", overflow: "hidden" }}>
+            {staticNoise.slice(0, 20).map((n, i) => (
+              <div
+                key={i}
+                className="absolute bg-white"
+                style={{
+                  left: `${i * 5}%`,
+                  width: `${2 + n * 3}%`,
+                  height: "100%",
+                  opacity: 0.3 + n * 0.5,
+                  filter: "blur(0.5px)",
+                }}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Fase 7-10: Expansion vertical con efecto CRT real */}
-      {phase >= 7 && phase <= 10 && (
+      {/* Fase 8-11: Expansion vertical con efecto rolling de CRT */}
+      {phase >= 8 && phase <= 11 && (
         <div
-          className="absolute left-0 right-0 top-1/2 bg-white overflow-hidden"
+          className="absolute left-0 right-0 top-1/2 overflow-hidden"
           style={{
-            height: phase === 7 ? "8%" : phase === 8 ? "30%" : phase === 9 ? "70%" : "100%",
+            height: phase === 8 ? "10%" : phase === 9 ? "40%" : phase === 10 ? "80%" : "100%",
             transform: "translateY(-50%)",
-            transition: "height 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-            boxShadow: `
-              0 0 40px 10px rgba(255,255,255,0.5),
-              inset 0 0 100px 20px rgba(200,220,255,0.3)
-            `,
+            transition: "height 0.28s cubic-bezier(0.22, 0.61, 0.36, 1)",
           }}
         >
-          {/* Lineas de escaneo durante expansion */}
+          {/* Gradiente de borde suave */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(180deg, 
+                rgba(200,220,255,0.3) 0%, 
+                rgba(255,255,255,0.95) 5%, 
+                rgba(255,255,255,1) 50%, 
+                rgba(255,255,255,0.95) 95%, 
+                rgba(200,220,255,0.3) 100%
+              )`,
+            }}
+          />
+
+          {/* Lineas de escaneo */}
           <div
             className="absolute inset-0"
             style={{
               background: `repeating-linear-gradient(
                 0deg,
-                transparent,
+                transparent 0px,
                 transparent 2px,
-                rgba(0,0,0,0.1) 2px,
-                rgba(0,0,0,0.1) 4px
+                rgba(0,0,0,0.08) 2px,
+                rgba(0,0,0,0.08) 4px
               )`,
+              animation: "crtScanlines 0.1s steps(2) infinite",
             }}
           />
 
-          {/* Interferencia horizontal */}
-          {phase >= 8 && (
+          {/* Efecto rolling/ondulacion */}
+          {phase >= 9 && (
             <div
               className="absolute inset-0"
               style={{
-                background: `linear-gradient(
-                  90deg,
+                background: `repeating-linear-gradient(
+                  0deg,
                   transparent 0%,
                   rgba(0,0,0,0.05) 25%,
-                  transparent 50%,
-                  rgba(0,0,0,0.05) 75%,
-                  transparent 100%
+                  transparent 50%
                 )`,
-                animation: "tvHorizontalNoise 0.1s steps(3) infinite",
+                backgroundSize: "100% 60px",
+                animation: "crtRolling 0.3s linear infinite",
               }}
             />
           )}
 
-          {/* Distorsion de onda */}
-          {phase === 9 && (
+          {/* Distorsion horizontal sutil */}
+          {phase >= 10 && (
             <>
-              {[...Array(5)].map((_, i) => (
+              {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
-                  className="absolute left-0 right-0 bg-black/10"
+                  className="absolute left-0 right-0"
                   style={{
+                    top: `${25 + i * 25}%`,
                     height: "2px",
-                    top: `${20 + i * 15}%`,
-                    animation: `tvWaveDistortion 0.15s ease-in-out infinite`,
-                    animationDelay: `${i * 0.03}s`,
+                    background: "rgba(0,0,0,0.1)",
+                    transform: `translateX(${(staticNoise[i] || 0) * 4 - 2}px)`,
+                    filter: "blur(0.5px)",
                   }}
                 />
               ))}
             </>
           )}
+
+          {/* Ruido estatico sutil */}
+          <div
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+              animation: "crtNoise 0.05s steps(4) infinite",
+            }}
+          />
         </div>
       )}
 
-      {/* Fase 11: Flash brillante final */}
-      {phase === 11 && (
-        <div
-          className="absolute inset-0 bg-white"
-          style={{
-            animation: "tvFinalFlash 0.2s ease-out forwards",
-            boxShadow: "inset 0 0 100px 50px rgba(200,220,255,0.5)",
-          }}
-        />
-      )}
-
-      {/* Fase 12: Fade out suave */}
+      {/* Fase 12: Flash de sincronizacion */}
       {phase === 12 && (
         <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, rgba(255,255,255,1) 0%, rgba(220,230,255,0.9) 50%, rgba(180,200,255,0.7) 100%)",
+            animation: "crtSyncFlash 0.2s ease-out forwards",
+          }}
+        />
+      )}
+
+      {/* Fase 13: Fade out */}
+      {phase === 13 && (
+        <div
           className="absolute inset-0 bg-white"
           style={{
-            animation: "tvFadeOut 0.4s ease-out forwards",
+            animation: "crtFadeOut 0.35s ease-out forwards",
           }}
         />
       )}
 
-      {/* Borde CRT con efecto de curvatura durante toda la animacion */}
-      {phase >= 3 && phase <= 11 && (
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            boxShadow: `
-              inset 0 0 100px 40px rgba(0,0,0,0.5),
-              inset 0 0 200px 80px rgba(0,0,0,0.3)
-            `,
-            borderRadius: "5%",
-          }}
-        />
-      )}
-
-      {/* Reflejo del tubo CRT */}
-      {phase >= 5 && phase <= 10 && (
-        <div
-          className="absolute top-0 left-0 right-0 h-1/3 pointer-events-none"
-          style={{
-            background: "linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, transparent 100%)",
-            opacity: 0.5,
-          }}
-        />
-      )}
-
-      {/* Ruido estatico sutil */}
-      {phase >= 6 && phase <= 10 && (
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-            animation: "tvStaticNoise 0.1s steps(5) infinite",
-          }}
-        />
+      {/* Borde de pantalla CRT curva - durante toda la animacion */}
+      {phase >= 4 && phase <= 12 && (
+        <>
+          {/* Sombra interior */}
+          <div
+            className="absolute inset-0"
+            style={{
+              boxShadow: `
+                inset 0 0 60px 25px rgba(0,0,0,0.6),
+                inset 0 0 120px 50px rgba(0,0,0,0.3)
+              `,
+              borderRadius: "4%",
+              pointerEvents: "none",
+            }}
+          />
+          {/* Reflejo superior sutil */}
+          <div
+            className="absolute top-0 left-[10%] right-[10%] h-[20%]"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%)",
+              borderRadius: "50% 50% 0 0",
+              opacity: phase >= 8 ? 0.6 : 0,
+              transition: "opacity 0.3s ease-out",
+            }}
+          />
+        </>
       )}
 
       <style jsx>{`
-        @keyframes tvPulse {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.8; }
+        @keyframes crtPointPulse {
+          0%, 100% { transform: scale(1); filter: brightness(1); }
+          50% { transform: scale(1.3); filter: brightness(1.3); }
         }
-        @keyframes tvFlicker {
-          0%, 100% { opacity: 0; }
-          50% { opacity: 0.5; }
+        @keyframes crtScanlines {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(4px); }
         }
-        @keyframes tvHorizontalNoise {
-          0% { transform: translateX(-10%); }
-          33% { transform: translateX(5%); }
-          66% { transform: translateX(-5%); }
-          100% { transform: translateX(10%); }
+        @keyframes crtRolling {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(60px); }
         }
-        @keyframes tvWaveDistortion {
-          0%, 100% { transform: scaleY(1) translateX(0); }
-          50% { transform: scaleY(2) translateX(3px); }
-        }
-        @keyframes tvFinalFlash {
-          0% { opacity: 1; filter: brightness(1.5); }
-          50% { opacity: 1; filter: brightness(2); }
-          100% { opacity: 0.9; filter: brightness(1); }
-        }
-        @keyframes tvFadeOut {
-          0% { opacity: 0.9; }
-          100% { opacity: 0; }
-        }
-        @keyframes tvStaticNoise {
+        @keyframes crtNoise {
           0% { transform: translate(0, 0); }
-          25% { transform: translate(-2%, 2%); }
-          50% { transform: translate(2%, -2%); }
-          75% { transform: translate(-2%, -2%); }
-          100% { transform: translate(2%, 2%); }
+          25% { transform: translate(-1%, 1%); }
+          50% { transform: translate(1%, -1%); }
+          75% { transform: translate(-1%, -1%); }
+          100% { transform: translate(1%, 1%); }
+        }
+        @keyframes crtSyncFlash {
+          0% { opacity: 1; filter: brightness(1.5) saturate(0.8); }
+          40% { opacity: 1; filter: brightness(1.8) saturate(0.5); }
+          100% { opacity: 0.95; filter: brightness(1) saturate(1); }
+        }
+        @keyframes crtFadeOut {
+          0% { opacity: 0.95; }
+          100% { opacity: 0; }
         }
       `}</style>
     </div>
