@@ -6,13 +6,19 @@ interface CmdLoaderProps {
   onComplete: () => void
 }
 
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext
+  }
+}
+
 class CMDSoundEngine {
   private audioContext: AudioContext | null = null
   private masterGain: GainNode | null = null
 
   init() {
     if (this.audioContext) return
-    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)()
     this.masterGain = this.audioContext.createGain()
     this.masterGain.connect(this.audioContext.destination)
     this.masterGain.gain.value = 0.4
@@ -223,7 +229,7 @@ const cmdLines = [
   { text: "", delay: 4000, type: "blank" },
   { text: "════════════════════════════════════════════════════════════════════", delay: 4200, type: "divider" },
   { text: "                    QWERTY LAUNCHER v3.0.0 BETA                     ", delay: 4400, type: "title" },
-  { text: "              By Exo Studio. REMEMBER, TRUST US                     ", delay: 4600, type: "subtitle" },
+  { text: "              Minecraft Bedrock Server Connector                    ", delay: 4600, type: "subtitle" },
   { text: "════════════════════════════════════════════════════════════════════", delay: 4800, type: "divider" },
   { text: "", delay: 5000, type: "blank" },
   { text: "[BOOT] Initializing system components...", delay: 5200, type: "boot" },
