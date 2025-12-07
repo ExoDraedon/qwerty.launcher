@@ -15,8 +15,8 @@ const BACKGROUND_IMAGE = "/back.png"
 // CONFIGURA EL SERVIDOR AQUI
 // ==========================================
 const SERVER_CONFIG = {
-  ip: "server.cprot.net",
-  port: 25570,
+  ip: "projectrivalsbedrock.exaroton.me",
+  port: 24565,
   name: "Project Rivals",
 }
 
@@ -40,14 +40,29 @@ export default function Home() {
     setIsConnecting(true)
     const { ip, port } = SERVER_CONFIG
 
-    // Abrir Minecraft con el protocolo minecraft://
-    const minecraftUrl = `minecraft://connect/?serverUrl=${ip}&serverPort=${port}`
-    window.location.href = minecraftUrl
+    // Primero intenta abrir con el protocolo de servidor directo
+    const minecraftUrl = `minecraft://?addExternalServer=${encodeURIComponent(SERVER_CONFIG.name)}|${ip}:${port}`
 
-    // Resetear estado despues de 3 segundos
+    // Crear un iframe oculto para intentar abrir Minecraft
+    const iframe = document.createElement("iframe")
+    iframe.style.display = "none"
+    iframe.src = minecraftUrl
+    document.body.appendChild(iframe)
+
+    // Tambien intentar con window.location como fallback
+    setTimeout(() => {
+      window.location.href = minecraftUrl
+    }, 100)
+
+    // Limpiar iframe despues de 2 segundos
+    setTimeout(() => {
+      document.body.removeChild(iframe)
+    }, 2000)
+
+    // Resetear estado despues de 5 segundos
     setTimeout(() => {
       setIsConnecting(false)
-    }, 3000)
+    }, 5000)
   }
 
   return (
