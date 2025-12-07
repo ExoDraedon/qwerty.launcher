@@ -5,6 +5,12 @@ import { Settings, Volume2, VolumeX, Loader2 } from "lucide-react"
 import type { VhsIntensity } from "@/app/page"
 import VhsEffects from "./vhs-effects"
 
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext
+  }
+}
+
 class CRTSoundEngine {
   private audioContext: AudioContext | null = null
   private masterGain: GainNode | null = null
@@ -12,7 +18,7 @@ class CRTSoundEngine {
 
   init() {
     if (this.audioContext) return
-    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)()
     this.masterGain = this.audioContext.createGain()
     this.masterGain.connect(this.audioContext.destination)
     this.masterGain.gain.value = 0.5
