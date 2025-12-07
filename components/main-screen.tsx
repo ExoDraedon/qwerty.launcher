@@ -94,120 +94,128 @@ export default function MainScreen({
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
-      {tvAnimation === "on" && (
-        <div
-          className="absolute inset-0 transition-all duration-500 ease-out"
-          style={{
-            backgroundImage: `url('${backgroundImage}')`,
-            backgroundSize: "contain",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-            transform: `translate(${parallaxX}px, ${parallaxY}px)`,
-            opacity: contentVisible ? 1 : 0,
-          }}
-        />
-      )}
+      {/* Fondo negro base que siempre esta presente */}
+      <div className="absolute inset-0 bg-black z-0" />
 
-      <div className="absolute inset-0 -z-10 bg-black" />
-
-      {tvAnimation === "on" && (
-        <div
-          className="absolute inset-0 transition-opacity duration-1000"
-          style={{
-            background: "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.8) 100%)",
-            opacity: contentVisible ? 1 : 0,
-          }}
-        />
-      )}
-
+      {/* Animacion de encendido - siempre encima de todo con z-50 */}
       {tvAnimation === "turning-on" && <TvTurnOnAnimation />}
 
+      {/* Contenido principal - solo se muestra cuando tvAnimation === "on" */}
       {tvAnimation === "on" && (
-        <div
-          className="relative z-10 w-full h-full flex flex-col transition-opacity duration-700"
-          style={{ opacity: contentVisible ? 1 : 0 }}
-        >
-          <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 md:gap-3">
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              className="p-2 md:p-3 bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all duration-300 group"
-            >
-              {isMuted ? (
-                <VolumeX className="w-4 h-4 md:w-5 md:h-5 text-white/60 group-hover:text-white transition-colors" />
-              ) : (
-                <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-white/60 group-hover:text-white transition-colors" />
-              )}
-            </button>
-            <button
-              onClick={onSettingsClick}
-              className="p-2 md:p-3 bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all duration-300 group"
-            >
-              <Settings className="w-4 h-4 md:w-5 md:h-5 text-white/60 group-hover:text-white group-hover:rotate-90 transition-all duration-500" />
-            </button>
-          </div>
+        <>
+          {/* Imagen de fondo con parallax */}
+          <div
+            className="absolute inset-0 z-10 transition-all duration-500 ease-out"
+            style={{
+              backgroundImage: `url('${backgroundImage}')`,
+              backgroundSize: "contain",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              backgroundColor: "black",
+              transform: `translate(${parallaxX}px, ${parallaxY}px)`,
+              opacity: contentVisible ? 1 : 0,
+            }}
+          />
 
-          <div className="flex-1" />
+          {/* Vignette */}
+          <div
+            className="absolute inset-0 z-20 transition-opacity duration-1000"
+            style={{
+              background:
+                "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.8) 100%)",
+              opacity: contentVisible ? 1 : 0,
+            }}
+          />
 
-          <div className="flex flex-col items-center pb-8 md:pb-16">
-            <p
-              className="text-white/40 text-[10px] md:text-xs uppercase tracking-[0.4em] md:tracking-[0.5em] mb-2 md:mb-3 font-mono"
-              style={{
-                textShadow: "0 0 15px rgba(255,255,255,0.2), 0 0 30px rgba(255,255,255,0.1)",
-                fontFamily: "'Courier New', monospace",
-                fontWeight: 300,
-              }}
-            >
-              ▸ Entrar a ◂
-            </p>
+          {/* UI Content */}
+          <div
+            className="relative z-30 w-full h-full flex flex-col transition-opacity duration-700"
+            style={{ opacity: contentVisible ? 1 : 0 }}
+          >
+            {/* Botones y contenido */}
+            <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 md:gap-3">
+              <button
+                onClick={() => setIsMuted(!isMuted)}
+                className="p-2 md:p-3 bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all duration-300 group"
+              >
+                {isMuted ? (
+                  <VolumeX className="w-4 h-4 md:w-5 md:h-5 text-white/60 group-hover:text-white transition-colors" />
+                ) : (
+                  <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-white/60 group-hover:text-white transition-colors" />
+                )}
+              </button>
+              <button
+                onClick={onSettingsClick}
+                className="p-2 md:p-3 bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all duration-300 group"
+              >
+                <Settings className="w-4 h-4 md:w-5 md:h-5 text-white/60 group-hover:text-white group-hover:rotate-90 transition-all duration-500" />
+              </button>
+            </div>
 
-            <button
-              onClick={onProjectRivalsClick}
-              disabled={isConnecting}
-              className={`relative group mb-6 md:mb-8 transform transition-all duration-300 ${
-                isConnecting ? "cursor-wait scale-95" : "cursor-pointer hover:scale-105"
-              }`}
-            >
-              <div
-                className={`absolute -inset-1 rounded-lg blur-md transition-opacity duration-500 ${
-                  isConnecting
-                    ? "bg-green-500/30 opacity-100 animate-pulse"
-                    : "bg-white/10 opacity-0 group-hover:opacity-100"
-                }`}
-              />
+            <div className="flex-1" />
 
-              <div
-                className={`relative px-4 md:px-6 py-2 md:py-2.5 backdrop-blur-sm border rounded-md overflow-hidden transition-all duration-300 ${
-                  isConnecting
-                    ? "bg-green-900/60 border-green-500/50"
-                    : "bg-black/60 border-white/30 group-hover:border-white/60 group-hover:bg-black/40"
+            <div className="flex flex-col items-center pb-8 md:pb-16">
+              <p
+                className="text-white/40 text-[10px] md:text-xs uppercase tracking-[0.4em] md:tracking-[0.5em] mb-2 md:mb-3 font-mono"
+                style={{
+                  textShadow: "0 0 15px rgba(255,255,255,0.2), 0 0 30px rgba(255,255,255,0.1)",
+                  fontFamily: "'Courier New', monospace",
+                  fontWeight: 300,
+                }}
+              >
+                ▸ Entrar a ◂
+              </p>
+
+              <button
+                onClick={onProjectRivalsClick}
+                disabled={isConnecting}
+                className={`relative group mb-6 md:mb-8 transform transition-all duration-300 ${
+                  isConnecting ? "cursor-wait scale-95" : "cursor-pointer hover:scale-105"
                 }`}
               >
-                <span
-                  className={`relative text-xs md:text-sm font-medium tracking-[0.15em] md:tracking-[0.2em] uppercase font-mono transition-colors flex items-center gap-2 ${
-                    isConnecting ? "text-green-400" : "text-white/90 group-hover:text-white"
+                <div
+                  className={`absolute -inset-1 rounded-lg blur-md transition-opacity duration-500 ${
+                    isConnecting
+                      ? "bg-green-500/30 opacity-100 animate-pulse"
+                      : "bg-white/10 opacity-0 group-hover:opacity-100"
                   }`}
-                  style={{
-                    textShadow: isConnecting ? "0 0 12px rgba(74,222,128,0.6)" : "0 0 8px rgba(255,255,255,0.4)",
-                  }}
-                >
-                  {isConnecting && <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />}
-                  {isConnecting ? "Conectando..." : serverName}
-                </span>
-                {!isConnecting && (
-                  <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                )}
-              </div>
-            </button>
+                />
 
-            <div className="w-full h-px relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/40 to-white/5" />
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent blur-sm" />
+                <div
+                  className={`relative px-4 md:px-6 py-2 md:py-2.5 backdrop-blur-sm border rounded-md overflow-hidden transition-all duration-300 ${
+                    isConnecting
+                      ? "bg-green-900/60 border-green-500/50"
+                      : "bg-black/60 border-white/30 group-hover:border-white/60 group-hover:bg-black/40"
+                  }`}
+                >
+                  <span
+                    className={`relative text-xs md:text-sm font-medium tracking-[0.15em] md:tracking-[0.2em] uppercase font-mono transition-colors flex items-center gap-2 ${
+                      isConnecting ? "text-green-400" : "text-white/90 group-hover:text-white"
+                    }`}
+                    style={{
+                      textShadow: isConnecting ? "0 0 12px rgba(74,222,128,0.6)" : "0 0 8px rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    {isConnecting && <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />}
+                    {isConnecting ? "Conectando..." : serverName}
+                  </span>
+                  {!isConnecting && (
+                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                  )}
+                </div>
+              </button>
+
+              <div className="w-full h-px relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/40 to-white/5" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent blur-sm" />
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {effectsEnabled && <VhsEffects intensity={vhsIntensity} />}
+          {/* VHS Effects - solo cuando effectsEnabled es true */}
+          {effectsEnabled && <VhsEffects intensity={vhsIntensity} />}
+        </>
+      )}
     </div>
   )
 }
