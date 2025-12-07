@@ -26,6 +26,7 @@ export default function MainScreen({
 }: MainScreenProps) {
   const [tvAnimation, setTvAnimation] = useState<"off" | "turning-on" | "on">("off")
   const [contentVisible, setContentVisible] = useState(false)
+  const [effectsEnabled, setEffectsEnabled] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [mousePosition, setMousePosition] = useState({ x: 0.5, y: 0.5 })
@@ -35,7 +36,10 @@ export default function MainScreen({
       setTvAnimation("turning-on")
       setTimeout(() => {
         setTvAnimation("on")
-        setTimeout(() => setContentVisible(true), 500)
+        setTimeout(() => {
+          setEffectsEnabled(true)
+          setContentVisible(true)
+        }, 500)
       }, 2800)
     }
   }, [tvTurnedOn])
@@ -90,31 +94,31 @@ export default function MainScreen({
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
-      <div
-        className="absolute inset-0 transition-all duration-300 ease-out"
-        style={{
-          backgroundImage: `url('${backgroundImage}')`,
-          backgroundSize: "contain",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          filter: tvAnimation === "on" ? "none" : "brightness(0)",
-          transform: tvAnimation === "on" ? `translate(${parallaxX}px, ${parallaxY}px)` : "scale(1)",
-        }}
-      />
+      {tvAnimation === "on" && (
+        <div
+          className="absolute inset-0 transition-all duration-500 ease-out"
+          style={{
+            backgroundImage: `url('${backgroundImage}')`,
+            backgroundSize: "contain",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            transform: `translate(${parallaxX}px, ${parallaxY}px)`,
+            opacity: contentVisible ? 1 : 0,
+          }}
+        />
+      )}
 
       <div className="absolute inset-0 -z-10 bg-black" />
 
-      <div className="absolute inset-0 -z-10 bg-black" />
-
-      <div
-        className="absolute inset-0 transition-opacity duration-1000"
-        style={{
-          background:
-            tvAnimation === "on"
-              ? "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.8) 100%)"
-              : "black",
-        }}
-      />
+      {tvAnimation === "on" && (
+        <div
+          className="absolute inset-0 transition-opacity duration-1000"
+          style={{
+            background: "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.8) 100%)",
+            opacity: contentVisible ? 1 : 0,
+          }}
+        />
+      )}
 
       {tvAnimation === "turning-on" && <TvTurnOnAnimation />}
 
@@ -203,7 +207,7 @@ export default function MainScreen({
         </div>
       )}
 
-      {tvAnimation === "on" && <VhsEffects intensity={vhsIntensity} />}
+      {effectsEnabled && <VhsEffects intensity={vhsIntensity} />}
     </div>
   )
 }
