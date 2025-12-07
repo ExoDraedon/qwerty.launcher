@@ -5,11 +5,12 @@ import CmdLoader from "@/components/cmd-loader"
 import MainScreen from "@/components/main-screen"
 import SettingsPanel from "@/components/settings-panel"
 import RotateDeviceOverlay from "@/components/rotate-device-overlay"
+import StartScreen from "@/components/start-screen"
 
 // ==========================================
 // CONFIGURA TU IMAGEN DE FONDO AQUI
 // ==========================================
-const BACKGROUND_IMAGE = "/back.png"
+const BACKGROUND_IMAGE = "/dark-cyberpunk-city-neon-lights.jpg"
 
 // ==========================================
 // CONFIGURA EL SERVIDOR AQUI
@@ -23,12 +24,17 @@ const SERVER_CONFIG = {
 export type VhsIntensity = "soft" | "normal" | "strong" | "extreme"
 
 export default function Home() {
+  const [audioUnlocked, setAudioUnlocked] = useState(false)
   const [loadingComplete, setLoadingComplete] = useState(false)
   const [tvTurnedOn, setTvTurnedOn] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [vhsIntensity, setVhsIntensity] = useState<VhsIntensity>("normal")
   const [isConnecting, setIsConnecting] = useState(false)
   const [showConnectionModal, setShowConnectionModal] = useState(false)
+
+  const handleStartClick = () => {
+    setAudioUnlocked(true)
+  }
 
   const handleLoadingComplete = () => {
     setLoadingComplete(true)
@@ -70,7 +76,9 @@ export default function Home() {
     <div className="relative w-full h-screen overflow-hidden bg-black">
       <RotateDeviceOverlay />
 
-      {!loadingComplete ? (
+      {!audioUnlocked ? (
+        <StartScreen onStart={handleStartClick} />
+      ) : !loadingComplete ? (
         <CmdLoader onComplete={handleLoadingComplete} />
       ) : (
         <MainScreen
