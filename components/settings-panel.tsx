@@ -236,7 +236,7 @@ export default function SettingsPanel({ intensity, onIntensityChange, onClose }:
                   </div>
                 </div>
                 <p className="text-xs text-white/30">
-                  Los efectos de sonido del launcher añaden inmersión a la experiencia retro.
+                  Los efectos de sonido del launcher añaden inmersión.
                 </p>
               </div>
             </div>
@@ -255,11 +255,11 @@ export default function SettingsPanel({ intensity, onIntensityChange, onClose }:
               <div className="space-y-3">
                 <div className="p-4 rounded-lg border border-white/10 bg-white/[0.02]">
                   <p className="text-xs text-white/50 uppercase tracking-wider mb-2">Desarrollado por</p>
-                  <p className="text-sm font-medium text-white">Tu Nombre Aquí</p>
+                  <p className="text-sm font-medium text-white">By SirDrogas//Qwerty Studio ||TRUST US||</p>
                 </div>
 
                 <div className="p-4 rounded-lg border border-white/10 bg-white/[0.02]">
-                  <p className="text-xs text-white/50 uppercase tracking-wider mb-2">Tecnologías</p>
+                  <p className="text-xs text-white/50 uppercase tracking-wider mb-2">Tecnologías usadas.</p>
                   <div className="flex flex-wrap gap-2">
                     {["Next.js", "React", "TypeScript", "Tailwind CSS"].map((tech) => (
                       <span
@@ -285,14 +285,14 @@ export default function SettingsPanel({ intensity, onIntensityChange, onClose }:
                 </div>
               </div>
 
-              <p className="text-center text-[10px] text-white/20">Versión 2.1.4 • Hecho con ♥ para la comunidad</p>
+              <p className="text-center text-[10px] text-white/20">Versión 2.1.4 • Hecho por Exo Studios **TRUST US**</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-white/5 bg-white/[0.02]">
-          <p className="text-[10px] text-white/30 text-center">Los cambios se aplican en tiempo real</p>
+          <p className="text-[10px] text-white/30 text-center">Los cambios se aplican en tiempo real (delay de unos segundos)</p>
         </div>
 
         {/* Scanlines overlay on panel */}
