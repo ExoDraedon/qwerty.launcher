@@ -91,13 +91,16 @@ export default function MainScreen({
   return (
     <div className="relative w-full h-full overflow-hidden">
       <div
-        className="absolute inset-[-30px] bg-cover bg-center bg-no-repeat transition-all duration-300 ease-out"
+        className="absolute inset-[-50px] bg-contain bg-center bg-no-repeat transition-all duration-300 ease-out"
         style={{
           backgroundImage: `url('${backgroundImage}')`,
+          backgroundSize: "cover",
           filter: tvAnimation === "on" ? "none" : "brightness(0)",
-          transform: tvAnimation === "on" ? `scale(1.1) translate(${parallaxX}px, ${parallaxY}px)` : "scale(1.2)",
+          transform: tvAnimation === "on" ? `scale(1.05) translate(${parallaxX}px, ${parallaxY}px)` : "scale(1.1)",
         }}
       />
+
+      <div className="absolute inset-0 -z-10 bg-black" />
 
       <div
         className="absolute inset-0 transition-opacity duration-1000"
